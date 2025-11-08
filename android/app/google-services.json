@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "142400875595",
+    "project_id": "travelmapbythanh",
+    "storage_bucket": "travelmapbythanh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:142400875595:android:e10ee0163585620b9531ce",
+        "android_client_info": {
+          "package_name": "com.mobiegis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "142400875595-j06nvt1u6sb2k5826tlathcgahq9u9kr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnDmR3Le1krJ1c5KSfFs2JysLnWpyGg08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "142400875595-j06nvt1u6sb2k5826tlathcgahq9u9kr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

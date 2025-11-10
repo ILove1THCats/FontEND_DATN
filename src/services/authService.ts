@@ -19,6 +19,8 @@ export interface Review {
 export interface Place {
   long: number;
   lat: number;
+  operator: string;
+  name: string;
 }
 
 type AuthResult = {
@@ -194,6 +196,30 @@ export const AuthService = {
             return Array.isArray(data) ? data : null;
         } catch (error) {
             console.error("Lỗi fetch review:", error);
+            return null;
+        }
+    },
+
+    nearbyPlacesFetch: async (amenity: string, lat: number, lon: number, radius: number = 2000): Promise<Place[] | null> => {
+        try {
+            console.log(amenity, lat, lon, radius);
+
+            const url = `${API_URL2}/nearby?amenity=${amenity}&lon=${lon}&lat=${lat}&radius=${radius}`;
+            const response = await fetch(url, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (!response.ok) {
+                console.error("API nearby lỗi:", response.status);
+                return null;
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error("Lỗi nearbyPlacesFetch:", error);
             return null;
         }
     },

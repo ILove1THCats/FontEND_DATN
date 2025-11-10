@@ -14,8 +14,10 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import WebView from 'react-native-webview';
 import { HomeScreenNavigationProp } from '../types/navigation';
-import { AuthService, CustomUser } from '../services/authService';
+import { AuthService, CustomUser, Place } from '../services/authService';
 import { Picker } from '@react-native-picker/picker';
+import Geolocation from '@react-native-community/geolocation';
+import { PermissionsAndroid, Platform } from 'react-native';
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
@@ -27,17 +29,73 @@ const HomeScreen = () => {
   const [currentUser, setCurrentUser] = useState<CustomUser | null>(null);
   const [amenity, setAmenity] = useState<string[]>([]);
   const [selectedAmenity, setSelectedAmenity] = useState("");
+  const [placeAmenity, setPlaceAmenity] = useState<Place[] | null>(null);
+  //GPS
+  const [currentPosition, setCurrentPosition] = useState<{ lon: number, lat: number } | null>(null);
 
+    useEffect(() => {
+      const fetchUser = async () => {
+        const user = await AuthService.getCurrentUser();
+        const amenitY = await AuthService.amenityFetch();
+        setAmenity(amenitY);
+        setCurrentUser(user);
+      };
+      fetchUser();
+    }, []);
+
+  // ===== REQUEST LOCATION PERMISSION =====
   useEffect(() => {
-    const fetchUser = async () => {
-      const user = await AuthService.getCurrentUser();
-      const amenitY = await AuthService.amenityFetch();
-      setAmenity(amenitY);
-      setCurrentUser(user);
-    };
-    fetchUser();
+    (async () => {
+      const granted = await requestLocationPermission();
+
+      if (!granted) {
+        console.log("Không có quyền GPS");
+        Alert.alert("Không có quyền GPS");
+        return;
+      }
+
+      Geolocation.getCurrentPosition(
+        (pos) => {
+          setCurrentPosition({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          });
+        },
+        (err) => {
+          console.log("GPS error:", err);
+          Alert.alert("GPS error", err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 10000,
+        }
+      );
+    })();
   }, []);
 
+  // ==================== REQUEST PERMISSION ====================
+  const requestLocationPermission = async () => {
+    try {
+      const result = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+          
+      ]);
+
+      console.log("Permission result:", result);
+
+      return (
+        result[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED &&
+        result[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
+      );
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  };
+
+  // ==================== LOGOUT ===============================
   const handleLogout = async () => {
     const result = await AuthService.signOut();
     if (result.success) {
@@ -47,6 +105,127 @@ const HomeScreen = () => {
       });
     }
   };
+
+  const handleSelectAmenity = async (value: string) => {
+    if (!currentPosition) {
+      Alert.alert("Chưa có vị trí!")
+      return;
+    }
+    if (!isMapReady) {
+      Alert.alert("Map chưa sẵn sàng!");
+      return;
+    }
+
+    console.log(currentPosition.lat, currentPosition.lon);
+
+    setSelectedAmenity(value);
+    try {
+      const result = await AuthService.nearbyPlacesFetch(
+      value,
+      currentPosition.lat,
+      currentPosition.lon,
+      2000
+    );
+
+    if (result && webViewRef.current) {
+      const js = `
+      (() => {
+        try {
+          // window.ReactNativeWebView.postMessage(JSON.stringify({ type: "DEBUG", msg: "inject running" }));
+
+          if (window.amenityLayer) {
+            map.removeLayer(window.amenityLayer);
+            window.amenityLayer.clearLayers();
+          }
+
+          window.amenityLayer = L.layerGroup().addTo(map);
+
+          const places = ${JSON.stringify(result) || '[]'};
+
+          places.forEach(p => {
+            if (p.lat && p.long) {
+              L.marker([p.lat, p.long])
+                .addTo(window.amenityLayer)
+                .bindPopup('<b>' + (p.name || "Địa điểm") + '</b>');
+            }
+          });
+
+          
+        } catch(e) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: "DEBUG",
+              msg: "inject error: " + e.message,
+              stack: e.stack
+            }));
+        }
+      })();
+      true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    }
+
+    } catch (error) {
+      console.error('Yippe bay màu rồi', error);
+    }
+  };
+
+  //Di chuyển đến vị trí người dùng
+  const handleGoToMyLocation = () => {
+    if (!currentPosition) {
+      Alert.alert("Chưa lấy được vị trí của bạn!");
+      return;
+    }
+
+    if (!webViewRef.current) return;
+
+    const { lat, lon } = currentPosition;
+
+    // Inject JS vào WebView
+    webViewRef.current.injectJavaScript(`
+      (function() {
+        try {
+          // Xóa marker cũ nếu có
+          if (window.myLocationMarker) {
+            map.removeLayer(window.myLocationMarker);
+          }
+
+          // Thêm marker mới tại vị trí người dùng
+          window.myLocationMarker = L.marker([${lat}, ${lon}], {
+            icon: L.icon({
+              iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+              iconSize: [30, 30],
+              iconAnchor: [15, 30],
+              popupAnchor: [0, -35] 
+            })
+          }).addTo(map)
+          .bindPopup('<b>Vị trí của bạn</b>')
+          .openPopup();
+
+          // Di chuyển map đến vị trí người dùng và zoom
+          map.setView([${lat}, ${lon}], 16);
+
+          // Debug
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: "DEBUG",
+              msg: "Đã di chuyển đến vị trí người dùng"
+            }));
+          }
+
+        } catch(e) {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: "DEBUG",
+              msg: "Lỗi handleGoToMyLocation: " + e.message,
+              stack: e.stack
+            }));
+          }
+        }
+      })();
+      true;
+    `);
+  };
+
 
   // Xử lý message từ WebView
   const handleWebViewMessage = (event: any) => {
@@ -90,10 +269,6 @@ const HomeScreen = () => {
       console.error('Lỗi xử lý message từ WebView:', error);
     }
   };
-
-  const handleSelectAmenity = () => {
-
-  }
 
   // Tìm kiếm địa điểm sử dụng Nominatim (OpenStreetMap)
   const handleSearch = async () => {
@@ -255,6 +430,7 @@ const HomeScreen = () => {
       <script>
         // Khởi tạo bản đồ
         const map = L.map('map').setView([10.762622, 106.660172], 13);
+        window.amenityLayer = L.layerGroup().addTo(map);
         
         // Thêm tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -455,77 +631,33 @@ const HomeScreen = () => {
         <Text style={styles.sectionTitle}>Đánh giá</Text>
       </View> */}
 
+      <TouchableOpacity 
+        style={styles.myLocationButton} 
+        onPress={handleGoToMyLocation}
+      >
+        <Text style={styles.myLocationButtonText}>📍</Text>
+      </TouchableOpacity>
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN ĐANG TÌM GÌ?</Text>
-        <Picker selectedValue={setSelectedAmenity} onValueChange={handleSelectAmenity}>
-          <Picker.Item label='Chọn...' value=""/>
+        <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?</Text>
+        <Picker selectedValue={selectedAmenity} onValueChange={(value) => handleSelectAmenity(value)}>
+          <Picker.Item label="Chọn..." value="" />
           {amenity
-            .filter(a => a) // loại null/undefined
-            .map(a => {
-              // tách chuỗi theo dấu gạch dưới hoặc dấu cách
-              const parts = a.split(/[_\s]+/); 
-              // lấy phần cuối (ví dụ 'Hotel' từ 'Love_Hotel')
+            .filter(a => a)
+            .map((original, index) => {
+              const parts = original.split(/[_\s]+/);
               const lastPart = parts[parts.length - 1];
-              // viết hoa chữ cái đầu
-              return lastPart.charAt(0).toUpperCase() + lastPart.slice(1).toLowerCase();
-            })
-            .map((a, index) => (
-              <Picker.Item key={index} label={a} value={a} />
-            ))}
+              const formatted = lastPart.charAt(0).toUpperCase() + lastPart.slice(1).toLowerCase();
+
+              return (
+                <Picker.Item 
+                  key={index}
+                  label={formatted}   // hiển thị đẹp
+                  value={original}    // trả về giá trị gốc
+                />
+              );
+            })}
         </Picker>
-        {/* <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => {
-              if (webViewRef.current) {
-                webViewRef.current.injectJavaScript(`
-                  map.setView([10.7720, 106.6983], 15);
-                  if (window.locationMarkers[1]) {
-                    window.locationMarkers[1].openPopup();
-                  }
-                  true;
-                `);
-              }
-            }}
-          >
-            <Text style={styles.quickActionText}>🏪 Chợ Bến Thành</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => {
-              if (webViewRef.current) {
-                webViewRef.current.injectJavaScript(`
-                  map.setView([10.7776, 106.6954], 15);
-                  if (window.locationMarkers[2]) {
-                    window.locationMarkers[2].openPopup();
-                  }
-                  true;
-                `);
-              }
-            }}
-          >
-            <Text style={styles.quickActionText}>🏛️ Dinh Độc Lập</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => {
-              if (webViewRef.current) {
-                webViewRef.current.injectJavaScript(`
-                  map.setView([10.7798, 106.6990], 15);
-                  if (window.locationMarkers[3]) {
-                    window.locationMarkers[3].openPopup();
-                  }
-                  true;
-                `);
-              }
-            }}
-          >
-            <Text style={styles.quickActionText}>⛪ Nhà thờ Đức Bà</Text>
-          </TouchableOpacity>
-        </ScrollView> */}
       </View>
     </View>
   );
@@ -663,6 +795,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
+  },
+  myLocationButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 50,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 999
+  },
+  myLocationButtonText: {
+    fontSize: 24,
   },
 });
 

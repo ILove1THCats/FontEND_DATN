@@ -18,18 +18,28 @@ import { AuthService, CustomUser, Place } from '../services/authService';
 import { Picker } from '@react-native-picker/picker';
 import Geolocation from '@react-native-community/geolocation';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { ReviewService } from '../services/reviewService';
 
 const HomeScreen = () => {
+  // Khúc này là navigation và webview
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const webViewRef = useRef<WebView>(null);
+  //Tiện ích
   const [searchText, setSearchText] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  //User
   const [currentUser, setCurrentUser] = useState<CustomUser | null>(null);
   const [amenity, setAmenity] = useState<string[]>([]);
   const [selectedAmenity, setSelectedAmenity] = useState("");
-  const [placeAmenity, setPlaceAmenity] = useState<Place[] | null>(null);
+  const [isMyLocate, setIsMyLocate] = useState(false);
+  //Đánh giá
+  const [userReview, setUserReview] = useState("");
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [isRouting, setIsRouting] = useState(false);
+  const [liked, setLiked] = useState(0);
+  const [rating, setRating] = useState(0);
   //GPS
   const [currentPosition, setCurrentPosition] = useState<{ lon: number, lat: number } | null>(null);
 
@@ -37,6 +47,7 @@ const HomeScreen = () => {
       const fetchUser = async () => {
         const user = await AuthService.getCurrentUser();
         const amenitY = await AuthService.amenityFetch();
+
         setAmenity(amenitY);
         setCurrentUser(user);
       };
@@ -106,6 +117,8 @@ const HomeScreen = () => {
     }
   };
 
+
+  // ==================== SEARCHING ===============================
   const handleSelectAmenity = async (value: string) => {
     if (!currentPosition) {
       Alert.alert("Chưa có vị trí!")
@@ -131,11 +144,13 @@ const HomeScreen = () => {
       const js = `
       (() => {
         try {
-          // window.ReactNativeWebView.postMessage(JSON.stringify({ type: "DEBUG", msg: "inject running" }));
-
           if (window.amenityLayer) {
             map.removeLayer(window.amenityLayer);
             window.amenityLayer.clearLayers();
+          }
+
+          if (window.routeLayer) {
+            map.removeLayer(window.routeLayer);
           }
 
           window.amenityLayer = L.layerGroup().addTo(map);
@@ -144,9 +159,23 @@ const HomeScreen = () => {
 
           places.forEach(p => {
             if (p.lat && p.long) {
-              L.marker([p.lat, p.long])
+              const marker = L.marker([p.lat, p.long])
                 .addTo(window.amenityLayer)
                 .bindPopup('<b>' + (p.name || "Địa điểm") + '</b>');
+
+              marker.on("click", () => {
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: "AMENITY_MARKER_CLICK",
+                    data: {
+                      id: p.id,
+                      name: p.name,
+                      lat: p.lat,
+                      lon: p.long
+                    }
+                  }));
+                }
+              });
             }
           });
 
@@ -169,108 +198,7 @@ const HomeScreen = () => {
     }
   };
 
-  //Di chuyển đến vị trí người dùng
-  const handleGoToMyLocation = () => {
-    if (!currentPosition) {
-      Alert.alert("Chưa lấy được vị trí của bạn!");
-      return;
-    }
-
-    if (!webViewRef.current) return;
-
-    const { lat, lon } = currentPosition;
-
-    // Inject JS vào WebView
-    webViewRef.current.injectJavaScript(`
-      (function() {
-        try {
-          // Xóa marker cũ nếu có
-          if (window.myLocationMarker) {
-            map.removeLayer(window.myLocationMarker);
-          }
-
-          // Thêm marker mới tại vị trí người dùng
-          window.myLocationMarker = L.marker([${lat}, ${lon}], {
-            icon: L.icon({
-              iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-              iconSize: [30, 30],
-              iconAnchor: [15, 30],
-              popupAnchor: [0, -35] 
-            })
-          }).addTo(map)
-          .bindPopup('<b>Vị trí của bạn</b>')
-          .openPopup();
-
-          // Di chuyển map đến vị trí người dùng và zoom
-          map.setView([${lat}, ${lon}], 16);
-
-          // Debug
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: "DEBUG",
-              msg: "Đã di chuyển đến vị trí người dùng"
-            }));
-          }
-
-        } catch(e) {
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: "DEBUG",
-              msg: "Lỗi handleGoToMyLocation: " + e.message,
-              stack: e.stack
-            }));
-          }
-        }
-      })();
-      true;
-    `);
-  };
-
-
-  // Xử lý message từ WebView
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      
-      switch (data.type) {
-        case 'MAP_READY':
-          setIsMapReady(true);
-          console.log('Bản đồ đã sẵn sàng');
-          break;
-          
-        case 'MARKER_CLICK':
-          setSelectedLocation(data.data);
-          Alert.alert(
-            data.data.name,
-            `${data.data.description}\n\n⭐ Đánh giá: ${data.data.rating}/5`,
-            [
-              { text: 'OK', style: 'default' },
-              { 
-                text: 'Xem chi tiết', 
-                onPress: () => navigation.navigate('Profile', { name: data.data.name })
-              }
-            ]
-          );
-          break;
-
-        case 'SEARCH_RESULT':
-          setIsSearching(false);
-          if (data.success) {
-            console.log('Tìm thấy địa điểm:', data.location);
-          } else {
-            Alert.alert('Không tìm thấy', 'Không tìm thấy địa điểm bạn yêu cầu');
-          }
-          break;
-          
-        default:
-          console.log('Unknown message type:', data.type);
-      }
-    } catch (error) {
-      console.error('Lỗi xử lý message từ WebView:', error);
-    }
-  };
-
-  // Tìm kiếm địa điểm sử dụng Nominatim (OpenStreetMap)
+  //-------------------------------------------------------------------------- Tìm kiếm địa điểm sử dụng Nominatim (OpenStreetMap)
   const handleSearch = async () => {
     if (!searchText.trim()) return;
     
@@ -323,9 +251,10 @@ const HomeScreen = () => {
             // Thông báo kết quả
             if (window.ReactNativeWebView) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'SEARCH_RESULT',
+                type: 'AMENITY_MARKER_CLICK',
                 success: true,
-                location: {
+                data: {
+                  id: 0,
                   name: '${location.display_name.split(',')[0]}',
                   lat: ${lat},
                   lon: ${lon},
@@ -348,67 +277,233 @@ const HomeScreen = () => {
     }
   };
 
-  // Tìm kiếm trong danh sách địa điểm có sẵn
-  const handleLocalSearch = () => {
-    if (webViewRef.current && searchText.trim()) {
-      webViewRef.current.injectJavaScript(`
-        const keyword = "${searchText.trim().toLowerCase()}";
-        const foundLocations = window.locations.filter(loc => 
-          loc.name.toLowerCase().includes(keyword) ||
-          loc.description.toLowerCase().includes(keyword)
-        );
-        
-        if (foundLocations.length > 0) {
-          // Di chuyển đến location đầu tiên tìm được
-          const firstLocation = foundLocations[0];
-          map.setView([firstLocation.lat, firstLocation.lng], 15);
-          
-          // Mở popup của location đó
-          if (window.locationMarkers && window.locationMarkers[firstLocation.id]) {
-            window.locationMarkers[firstLocation.id].openPopup();
+  // ==================== USER LOCATETION ===============================
+  const handleGoToMyLocation = () => {
+    if (!currentPosition) {
+      Alert.alert("Chưa lấy được vị trí của bạn!");
+      return;
+    }
+
+    setIsMyLocate(true)
+    if (!webViewRef.current) return;
+
+    const { lat, lon } = currentPosition;
+
+    // Inject JS vào WebView
+    webViewRef.current.injectJavaScript(`
+      (function() {
+        try {
+          // Xóa marker cũ nếu có
+          if (window.myLocationMarker) {
+            map.removeLayer(window.myLocationMarker);
           }
-          
-          // Thông báo kết quả
+
+          // Thêm marker mới tại vị trí người dùng
+          window.myLocationMarker = L.marker([${lat}, ${lon}], {
+            icon: L.icon({
+              iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+              iconSize: [30, 30],
+              iconAnchor: [15, 30],
+              popupAnchor: [0, -35] 
+            })
+          }).addTo(map)
+          .bindPopup('<b>Vị trí của bạn</b>')
+          .openPopup();
+
+          // Di chuyển map đến vị trí người dùng và zoom
+          map.setView([${lat}, ${lon}], 16);
+
+          // Debug
           if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'SEARCH_RESULT',
-              success: true,
-              location: firstLocation
+              type: "DEBUG",
+              msg: "Đã di chuyển đến vị trí người dùng"
             }));
           }
-        } else {
-          // Không tìm thấy trong danh sách local
+
+        } catch(e) {
           if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'SEARCH_RESULT', 
-              success: false,
-              message: 'Không tìm thấy địa điểm trong danh sách'
+              type: "DEBUG",
+              msg: "Lỗi handleGoToMyLocation: " + e.message,
+              stack: e.stack
             }));
           }
         }
-        true;
-      `);
-    }
+      })();
+      true;
+    `);
   };
 
   // Reset bản đồ về vị trí mặc định
   const handleResetMap = () => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript(`
-        map.setView([10.762622, 106.660172], 13);
-        // Xóa search marker nếu có
-        if (window.searchMarker) {
-          map.removeLayer(window.searchMarker);
-        }
+        (function() {
+          try {
+            map.setView([10.762622, 106.660172], 13);
+            if (window.searchMarker) {
+              map.removeLayer(window.searchMarker);
+            }
+
+            if (window.routeLayer) {
+              map.removeLayer(window.routeLayer);
+            }
+          } catch(e) {
+            console.error("Inject JS error:", e);
+            alert("Lỗi JS: " + e.message);
+          }
+        })
         true;
       `);
     }
     setSearchText('');
     setSelectedLocation(null);
     setIsSearching(false);
+    setIsRouting(false);
   };
 
-  // HTML với dữ liệu địa điểm và chức năng tìm kiếm
+  // ==================== REVIEWS ===============================
+  const handleLike = async (userid:number, placeid:number) => {
+    const result = await ReviewService.likeUp(userid, placeid);
+    console.log(result);
+  }
+
+  const handleSubmitReview = async() => {
+    if (!selectedLocation) {
+      Alert.alert("Chọn địa điểm trước!");
+      return;
+    }
+
+    if (!userReview.trim()) {
+      Alert.alert("Bạn chưa nhập review!");
+      return;
+    }
+
+    const newReview = {
+      placeid: Number(selectedLocation.id),
+      userid: Number(currentUser?.id),
+      rating: Number(rating),
+      comment: userReview,
+      time: new Date().toLocaleString("vi-VN")
+    };
+
+    const res = await ReviewService.reviewUpdate(newReview);
+
+    setReviews([newReview, ...reviews]);
+    setUserReview("");
+
+    Alert.alert("Thành công", "Cảm ơn bạn đã đánh giá!");
+  };
+
+  // ==================== WEBVIEW PROCESSING ===============================
+  const handleWebViewMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      
+      switch (data.type) {
+        case 'MAP_READY':
+          setIsMapReady(true);
+          console.log('Bản đồ đã sẵn sàng');
+          break;
+
+        case 'SEARCH_RESULT':
+          setIsSearching(false);
+          if (data.success) {
+            console.log('Tìm thấy địa điểm:', data.location);
+          } else {
+            Alert.alert('Không tìm thấy', 'Không tìm thấy địa điểm bạn yêu cầu');
+          }
+          break;
+        
+        case 'AMENITY_MARKER_CLICK':
+            try {
+              if (!currentPosition) {
+                Alert.alert("Vị trí hiện tại chưa có!");
+                break;
+              }
+
+              //TODO: Kiểm tra - đã kiểm tra
+              const startLon = currentPosition.lon;
+              const startLat = currentPosition.lat;
+              const endLon = data.data.lon;
+              const endLat = data.data.lat;
+              const like = await ReviewService.getLike(data.data.id);
+              const oldReview = await ReviewService.reviewFetch(data.data.id);
+
+
+              
+              if (isMyLocate === false) {
+                handleGoToMyLocation();
+              }
+              setReviews(oldReview ? oldReview : []);
+              setLiked(like);
+              setSelectedLocation(data.data);
+              setIsRouting(true);
+              const url = `http://10.0.2.2:3000/proxy?x1=${startLon}&y1=${startLat}&x2=${endLon}&y2=${endLat}`;
+
+              if (webViewRef.current) {
+                webViewRef.current.injectJavaScript(`
+                  (function() {
+                    try {
+                      console.log("Fetching route from WFS...");
+                      fetch('${url}')
+                        .then(res => res.json())
+                        .then(data => {
+                          console.log("GeoJSON features count:", data.features ? data.features.length : 0);
+
+                          if (!data.features || data.features.length === 0) {
+                            alert("Không có tuyến đường trả về từ server");
+                            return;
+                          }
+
+                          if (window.routeLayer) {
+                            map.removeLayer(window.routeLayer);
+                          }
+
+                          window.routeLayer = L.geoJSON(data, {
+                            style: { color: 'red', weight: 4 }
+                          }).addTo(map);
+
+                          map.fitBounds(window.routeLayer.getBounds());
+
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: "DEBUG",
+                              msg: "Đã vẽ tuyến đường thành công"
+                            }));
+                          }
+                        })
+                        .catch(e => {
+                          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'DEBUG', msg: e.message }));
+                          console.error("Fetch WFS error:", e);
+                          alert("Lỗi fetch WFS: " + e.message);
+                        });
+                    } catch(e) {
+                      console.error("Inject JS error:", e);
+                      alert("Lỗi JS: " + e.message);
+                    }
+                  })();
+                `);
+              }
+          } catch (error) {
+            console.error('Lỗi AMENITY_MARKER_CLICK:', error);
+            Alert.alert('Lỗi', 'Không thể vẽ tuyến đường');
+          }
+          break;
+        default:
+          console.log('Unknown message type:', data.type);
+
+        case 'DEBUG':
+          console.log('WebView DEBUG:', data.msg);
+          break;
+      } 
+    } catch (error) {
+      console.error('Lỗi xử lý message từ WebView:', error);
+    }
+  };
+
+  // ==================================================================== HTML với dữ liệu địa điểm và chức năng tìm kiếm
   const mapHTML = `
     <!DOCTYPE html>
     <html>
@@ -455,85 +550,6 @@ const HomeScreen = () => {
           }
         )
         
-        // Dữ liệu địa điểm
-        const locations = [
-          {
-            id: 1,
-            name: "Chợ Bến Thành",
-            lat: 10.7720,
-            lng: 106.6983,
-            description: "Chợ truyền thống nổi tiếng ở Sài Gòn",
-            rating: 4.5,
-            type: "market"
-          },
-          {
-            id: 2, 
-            name: "Dinh Độc Lập",
-            lat: 10.7776,
-            lng: 106.6954,
-            description: "Di tích lịch sử quan trọng",
-            rating: 4.7,
-            type: "historical"
-          },
-          {
-            id: 3,
-            name: "Nhà thờ Đức Bà",
-            lat: 10.7798,
-            lng: 106.6990,
-            description: "Nhà thờ cổ kiến trúc Pháp", 
-            rating: 4.6,
-            type: "religious"
-          },
-          {
-            id: 4,
-            name: "Bưu điện Thành phố",
-            lat: 10.7792, 
-            lng: 106.6995,
-            description: "Công trình kiến trúc cổ điển",
-            rating: 4.4,
-            type: "historical"
-          },
-          {
-            id: 5,
-            name: "Phố đi bộ Nguyễn Huệ", 
-            lat: 10.7733,
-            lng: 106.7030,
-            description: "Không gian văn hóa và giải trí",
-            rating: 4.3,
-            type: "entertainment"
-          }
-        ];
-        
-        // Lưu locations ra global để sử dụng trong search
-        window.locations = locations;
-        window.locationMarkers = {};
-        
-        // Thêm markers cho các địa điểm
-        locations.forEach(location => {
-          const marker = L.marker([location.lat, location.lng])
-            .addTo(map)
-            .bindPopup(\`
-              <div class="location-popup">
-                <div class="location-name">\${location.name}</div>
-                <div>\${location.description}</div>
-                <div class="location-rating">⭐ \${location.rating}/5</div>
-              </div>
-            \`);
-          
-          // Lưu marker để có thể truy cập sau
-          window.locationMarkers[location.id] = marker;
-          
-          // Thêm sự kiện click
-          marker.on('click', function() {
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'MARKER_CLICK',
-                data: location
-              }));
-            }
-          });
-        });
-        
         // Thông báo khi map ready
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -545,33 +561,36 @@ const HomeScreen = () => {
     </body>
     </html>
   `;
-
+  
+  //=========================================================================================== RETURNING =================================================================================
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        {currentUser && (
-          <Text style={styles.welcomeText}>
-            👋 Xin chào, {currentUser.email}!
-          </Text>
-        )}
-        
-        <View style={styles.buttonRow}>
-          <Button 
-            title='Đánh giá'
-            onPress={() => navigation.navigate('Review')}/>
+        {currentUser ? (
+          <>
+            <Text style={styles.welcomeText}>
+              👋 Xin chào, {currentUser.email}!
+            </Text>
 
+            <View style={styles.buttonRow}>
+              <Button
+                title="Hồ sơ"
+                onPress={() => navigation.navigate('Profile')}
+              />
+              <Button
+                title="Đăng xuất"
+                onPress={handleLogout}
+                color="#FF3B30"
+              />
+            </View>
+          </>
+        ) : (
           <Button
-            title="Hồ sơ"
-            onPress={() => navigation.navigate('Profile', { name: 'Jane' })}
+            title="Đăng nhập"
+            onPress={() => navigation.navigate('Login')}
           />
-          
-          <Button
-            title="Đăng xuất"
-            onPress={handleLogout}
-            color="#FF3B30"
-          />
-        </View>
+        )}
       </View>
 
       {/* Search Bar */}
@@ -619,46 +638,110 @@ const HomeScreen = () => {
         )}
       </View>
 
-      {/* Selected Location Info */}
-      {selectedLocation && (
-        <View style={styles.locationInfo}>
-          <Text style={styles.locationName}>{selectedLocation.name}</Text>
-          <Text style={styles.locationDescription}>{selectedLocation.description}</Text>
-          <Text style={styles.locationRating}>⭐ {selectedLocation.rating}/5</Text>
-        </View>
-      )}
-      {/* <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Đánh giá</Text>
-      </View> */}
-
       <TouchableOpacity 
         style={styles.myLocationButton} 
         onPress={handleGoToMyLocation}
       >
-        <Text style={styles.myLocationButtonText}>📍</Text>
+        <Text style={styles.myLocationButtonText}>🚀</Text>
       </TouchableOpacity>
-      {/* Quick Actions */}
-      <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?</Text>
-        <Picker selectedValue={selectedAmenity} onValueChange={(value) => handleSelectAmenity(value)}>
-          <Picker.Item label="Chọn..." value="" />
-          {amenity
-            .filter(a => a)
-            .map((original, index) => {
-              const parts = original.split(/[_\s]+/);
-              const lastPart = parts[parts.length - 1];
-              const formatted = lastPart.charAt(0).toUpperCase() + lastPart.slice(1).toLowerCase();
 
-              return (
-                <Picker.Item 
-                  key={index}
-                  label={formatted}   // hiển thị đẹp
-                  value={original}    // trả về giá trị gốc
-                />
-              );
-            })}
-        </Picker>
-      </View>
+      {isRouting ? (
+        selectedLocation && currentUser &&(
+          <View style={styles.reviewContainer}>
+            {/* Góc trên: Bong bóng icon */}
+            <View style={styles.reviewHeaderRight}>
+              <TouchableOpacity style={styles.bubbleIcon} onPress={() => handleLike(Number(currentUser.id) , selectedLocation.id)}>
+                <Text style={{ fontSize: 18 }}>⭐ {liked}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.bubbleIcon} onPress={() => setIsRouting(false)}>
+                <Text style={{ fontSize: 18 }}>❌</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.sectionTitle}>
+              Đánh giá địa điểm: {selectedLocation.name}
+            </Text>
+
+            {/* Ô nhập review */}
+            <TextInput
+              placeholder="Viết cảm nhận của bạn..."
+              style={styles.reviewInput}
+              multiline
+              value={userReview}
+              onChangeText={setUserReview}
+            />
+
+          <Picker
+            selectedValue={rating}
+            onValueChange={(value) => setRating(value)}
+          >
+            <Picker.Item label="1 sao" value={1} />
+            <Picker.Item label="2 sao" value={2} />
+            <Picker.Item label="3 sao" value={3} />
+            <Picker.Item label="4 sao" value={4} />
+            <Picker.Item label="5 sao" value={5} />
+          </Picker>
+
+            {/* Nút gửi */}
+            <TouchableOpacity 
+              style={styles.submitReviewButton}
+              onPress={handleSubmitReview}
+            >
+              <Text style={styles.submitReviewText}>Gửi đánh giá</Text>
+            </TouchableOpacity>
+
+            {/* Danh sách review */}
+            <ScrollView style={styles.reviewList}>
+              {reviews.length === 0 ? (
+                <Text style={styles.noReview}>Chưa có đánh giá nào.</Text>
+              ) : (
+                reviews.map((rev, index) => (
+                  <View key={index} style={styles.reviewItem}>
+                    <Text style={styles.reviewUser}>{rev.full_name}</Text>
+                    {rev.rating ? (
+                      <View style={{ flexDirection: "row", marginVertical: 4 }}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Text key={i} style={{ fontSize: 16 }}>
+                            {i < rev.rating ? "⭐" : "☆"}
+                          </Text>
+                        ))}
+                      </View> 
+                    ) : null}
+                    <Text style={styles.reviewContent}>{rev.comment}</Text>
+                    <Text style={styles.reviewTime}>{rev.created_at}</Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        )
+      ) : (
+        <View style={styles.quickActions}>
+          <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?</Text>
+
+          <Picker 
+            selectedValue={selectedAmenity} 
+            onValueChange={(value) => handleSelectAmenity(value)}
+          >
+            <Picker.Item label="Chọn..." value="" />
+            {amenity
+              .filter(a => a)
+              .map((original, index) => {
+                const parts = original.split(/[_\s]+/);
+                const lastPart = parts[parts.length - 1];
+                const formatted = lastPart.charAt(0).toUpperCase() + lastPart.slice(1).toLowerCase();
+                return (
+                  <Picker.Item 
+                    key={index}
+                    label={formatted}
+                    value={original}
+                  />
+                );
+              })}
+          </Picker>
+        </View>
+      )}
     </View>
   );
 };
@@ -816,6 +899,99 @@ const styles = StyleSheet.create({
   myLocationButtonText: {
     fontSize: 24,
   },
+
+  reviewContainer: {
+  padding: 16,
+  borderTopWidth: 1,
+  borderColor: "#eee",
+  backgroundColor: "#fff",
+  marginBottom: 10
+},
+
+  reviewHeaderRight: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 10,
+  },
+
+  bubbleIcon: {
+    backgroundColor: "#f3f3f3",
+    padding: 8,
+    borderRadius: 20,
+    marginLeft: 8,
+    elevation: 2
+  },
+
+  reviewInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 80,
+    textAlignVertical: "top",
+    backgroundColor: "#fafafa",
+    marginBottom: 12
+  },
+
+  submitReviewButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 16
+  },
+
+  submitReviewText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16
+  },
+
+  reviewList: {
+    maxHeight: 180,
+    marginTop: 10
+  },
+
+  reviewItem: {
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 8,
+    backgroundColor: "#f5f5f5"
+  },
+
+  reviewUser: {
+    fontWeight: "bold",
+    marginBottom: 4
+  },
+
+  reviewContent: {
+    fontSize: 14,
+    color: "#444"
+  },
+
+  reviewTime: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 4
+  },
+
+  noReview: {
+    fontStyle: "italic",
+    color: "#999",
+    textAlign: "center"
+  },
+
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(170, 10, 10, 1)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 20
+  }
 });
 
 export default HomeScreen;

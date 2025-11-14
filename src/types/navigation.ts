@@ -6,7 +6,7 @@ export type RootStackParamList = {
     SignUp: undefined;
     ForgotPassword: undefined;
     Home: undefined;
-    Profile: { name: string };
+    Profile: undefined;
     Admin: undefined;
     Review: undefined
     // MapDetail: { location: any};
@@ -16,6 +16,7 @@ export type RootStackParamList = {
 export type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 export type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 export type SignUpScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SignUp'>;
-export type ProfileScreenRouteProp = {route: {params: { name: string }}};
+export type ForgotPasswordNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>;
+export type ProfileScreenRouteProp = NativeStackNavigationProp<RootStackParamList, 'Profile'>;
 
 // export type FirebaseUser = FirebaseUser1;

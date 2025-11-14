@@ -31,6 +31,7 @@ const LoginScreen = () => {
       if (user) {
         // Đã đăng nhập, chuyển đến Home
         navigation.replace('Home');
+        navigation.replace
       }
     });
 
@@ -63,12 +64,12 @@ const LoginScreen = () => {
 
   const handleSignUp = () => {
     // navigation.navigate('SignUp');
-    navigation.replace('SignUp')
+    navigation.replace('SignUp');
   };
 
   const handleForgotPassword = () => {
     // navigation.navigate('ForgotPassword');
-    Alert.alert('Thông báo', 'Tính năng quên mật khẩu sẽ được phát triển sau');
+    navigation.replace('ForgotPassword');
   };
 
   return (

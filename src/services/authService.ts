@@ -29,17 +29,9 @@ type AuthResult = {
     user?: CustomUser | null;
 }
 
-// Type guard để kiểm tra Firebase error
-const isFirebaseAuthError = (error: unknown): error is { code: string; message: string } => {
-    return typeof error === 'object' && error !== null && 'code' in error;
-};
-
-
 // services/authService.ts
 const API_URL = "http://192.168.56.1:3000/api/users";
-const API_URL1 = "http://192.168.56.1:3000/api/reviews";
 const API_URL2 = "http://192.168.56.1:3000/api/places";
-const API_URL3 = "http://192.168.56.1:3000/api/roads";
 
 export const AuthService = {
     /**
@@ -202,8 +194,6 @@ export const AuthService = {
 
     nearbyPlacesFetch: async (amenity: string, lat: number, lon: number, radius: number = 2000): Promise<Place[] | null> => {
         try {
-            console.log(amenity, lat, lon, radius);
-
             const url = `${API_URL2}/nearby?amenity=${amenity}&lon=${lon}&lat=${lat}&radius=${radius}`;
             const response = await fetch(url, {
                 method: "GET",

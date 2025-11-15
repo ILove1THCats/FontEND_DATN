@@ -2,8 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
 export interface CustomUser {
-    id: string,
+    user_id: number,
+    full_name: string,
     email: string,
+    created_at: string,
     role: 'user' | 'admin' // Dùng cái này phân quyền
 }
 

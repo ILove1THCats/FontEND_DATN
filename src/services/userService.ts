@@ -17,15 +17,13 @@ export const UserService = {
 
             if (!userStr) return null; 
 
-            const user = JSON.parse(userStr); 
+            const user:User = JSON.parse(userStr); 
 
-            console.log(user.id);
-
-            const response = await fetch(`${API_URL}/profile?userid=${user.id}`, {
+            const response = await fetch(`${API_URL}/profile/${user.user_id}`, {
                 method: "GET",
                 headers: { "Content-Type": "application/json" },
             });
-            
+            console.log(response);
             if (!response.ok) {
                 console.log("Lỗi fetch profile");
             }

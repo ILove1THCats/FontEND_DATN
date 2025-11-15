@@ -20,7 +20,7 @@ const ProfileScreen = () => {
       {userInformation ? (
         <View style={styles.card}>
           <Text style={styles.title}>{userInformation.full_name}</Text>
-          <Text style={styles.subtitle}>User Profile</Text>
+          <Text style={styles.subtitle}>Thông tin người dùng</Text>
 
           <View style={styles.infoRow}>
             <Text style={styles.label}>Email:</Text>
@@ -28,12 +28,12 @@ const ProfileScreen = () => {
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Role:</Text>
+            <Text style={styles.label}>Cấp độ quản trị:</Text>
             <Text style={styles.value}>{userInformation.role}</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Created:</Text>
+            <Text style={styles.label}>Ngày tạo:</Text>
             <Text style={styles.value}>
               {new Date(userInformation.created_at).toLocaleDateString()}
             </Text>

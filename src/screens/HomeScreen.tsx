@@ -39,7 +39,7 @@ const HomeScreen = () => {
   const [reviews, setReviews] = useState<any[]>([]);
   const [isRouting, setIsRouting] = useState(false);
   const [liked, setLiked] = useState(0);
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(1);
   //GPS
   const [currentPosition, setCurrentPosition] = useState<{ lon: number, lat: number } | null>(null);
 
@@ -365,7 +365,8 @@ const HomeScreen = () => {
 
   // ==================== REVIEWS ===============================
   const handleLike = async (userid:number, placeid:number) => {
-    const result = await ReviewService.likeUp(userid, placeid);
+    console.log("Yoyo yo: ", placeid, userid);
+    const result = await ReviewService.upLike(placeid, userid);
     console.log(result);
   }
 
@@ -382,15 +383,13 @@ const HomeScreen = () => {
 
     const newReview = {
       placeid: Number(selectedLocation.id),
-      userid: Number(currentUser?.id),
+      userid: Number(currentUser?.user_id),
       rating: Number(rating),
       comment: userReview,
-      time: new Date().toLocaleString("vi-VN")
     };
 
-    const res = await ReviewService.reviewUpdate(newReview);
+    await ReviewService.reviewUpdate(newReview);
 
-    setReviews([newReview, ...reviews]);
     setUserReview("");
 
     Alert.alert("Thành công", "Cảm ơn bạn đã đánh giá!");
@@ -430,13 +429,13 @@ const HomeScreen = () => {
               const endLat = data.data.lat;
               const like = await ReviewService.getLike(data.data.id);
               const oldReview = await ReviewService.reviewFetch(data.data.id);
-
-
               
+              console.log(oldReview);
               if (isMyLocate === false) {
                 handleGoToMyLocation();
               }
-              setReviews(oldReview ? oldReview : []);
+
+              setReviews(oldReview);
               setLiked(like);
               setSelectedLocation(data.data);
               setIsRouting(true);
@@ -570,7 +569,7 @@ const HomeScreen = () => {
         {currentUser ? (
           <>
             <Text style={styles.welcomeText}>
-              👋 Xin chào, {currentUser.email}!
+              👋 Xin chào, {currentUser.full_name}!
             </Text>
 
             <View style={styles.buttonRow}>
@@ -650,7 +649,7 @@ const HomeScreen = () => {
           <View style={styles.reviewContainer}>
             {/* Góc trên: Bong bóng icon */}
             <View style={styles.reviewHeaderRight}>
-              <TouchableOpacity style={styles.bubbleIcon} onPress={() => handleLike(Number(currentUser.id) , selectedLocation.id)}>
+              <TouchableOpacity style={styles.bubbleIcon} onPress={() => handleLike(Number(currentUser.user_id) , selectedLocation.id)}>
                 <Text style={{ fontSize: 18 }}>⭐ {liked}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.bubbleIcon} onPress={() => setIsRouting(false)}>

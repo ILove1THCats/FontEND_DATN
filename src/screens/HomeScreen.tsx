@@ -139,7 +139,8 @@ const HomeScreen = () => {
       currentPosition.lon,
       2000
     );
-
+    
+    console.log(result);
     if (result && webViewRef.current) {
       const js = `
       (() => {
@@ -414,7 +415,17 @@ const HomeScreen = () => {
             Alert.alert('Không tìm thấy', 'Không tìm thấy địa điểm bạn yêu cầu');
           }
           break;
-        
+
+        case 'ROUTE_INFO':
+          if (selectedLocation) {
+            setSelectedLocation((prev: any) => ({
+              ...prev,
+              distance_km: data.distance_km,
+              time_h: data.time_h
+            }));
+          }
+          break;
+
         case 'AMENITY_MARKER_CLICK':
             try {
               if (!currentPosition) {
@@ -468,8 +479,9 @@ const HomeScreen = () => {
 
                           if (window.ReactNativeWebView) {
                             window.ReactNativeWebView.postMessage(JSON.stringify({
-                              type: "DEBUG",
-                              msg: "Đã vẽ tuyến đường thành công"
+                              type: "ROUTE_INFO",
+                              distance_km: data.total_distance_km,
+                              time_h: data.total_time_h
                             }));
                           }
                         })
@@ -643,6 +655,21 @@ const HomeScreen = () => {
       >
         <Text style={styles.myLocationButtonText}>🚀</Text>
       </TouchableOpacity>
+      
+      {selectedLocation && !currentUser ? (
+      <View style={styles.reviewContainer}>
+        <Text style={styles.sectionTitle}>
+          Đây là địa điểm: {selectedLocation?.name}
+        </Text>
+        <Text>
+          Khoảng cách: {selectedLocation?.distance_km?.toFixed(2)} km
+        </Text>
+        <Text>
+          Thời gian di chuyển: {selectedLocation?.time_h ? (selectedLocation.time_h * 60).toFixed(0) : 0} phút
+        </Text>
+      </View>
+      ) : console.log("Chưa chọn!")}
+
 
       {isRouting ? (
         selectedLocation && currentUser &&(
@@ -661,7 +688,15 @@ const HomeScreen = () => {
             <Text style={styles.sectionTitle}>
               Đánh giá địa điểm: {selectedLocation.name}
             </Text>
-
+            <Text>
+              Giờ mở cửa: 6h - 21h
+            </Text>
+            <Text>
+              Khoảng cách: {selectedLocation?.distance_km?.toFixed(2)} km
+            </Text>
+            <Text>
+              Thời gian di chuyển: {selectedLocation?.time_h ? (selectedLocation.time_h * 60).toFixed(0) : 0} phút (40km/h)
+            </Text>
             {/* Ô nhập review */}
             <TextInput
               placeholder="Viết cảm nhận của bạn..."
@@ -718,7 +753,7 @@ const HomeScreen = () => {
       ) : (
         <View style={styles.quickActions}>
           <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?</Text>
-
+          <Text style={styles.sectionTitle}>-Tìm kiếm nhanh 2km xung quanh-</Text>
           <Picker 
             selectedValue={selectedAmenity} 
             onValueChange={(value) => handleSelectAmenity(value)}

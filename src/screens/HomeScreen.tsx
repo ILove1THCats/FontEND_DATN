@@ -19,6 +19,7 @@ import { Picker } from '@react-native-picker/picker';
 import Geolocation from '@react-native-community/geolocation';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { ReviewService } from '../services/reviewService';
+import hcmBoundary from '../../assets/maps/TPHCM_bound.json';
 
 const HomeScreen = () => {
   // Khúc này là navigation và webview
@@ -84,6 +85,37 @@ const HomeScreen = () => {
       );
     })();
   }, []);
+
+  //Khởi tạo ranh giới
+  useEffect(() => {
+    if (isMapReady) {
+      console.log('WebView load completed');
+
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            const boundary = ${JSON.stringify(hcmBoundary)};
+
+            if (window.boundaryLayer) {
+              map.removeLayer(window.boundaryLayer);
+            }
+
+            window.boundaryLayer = L.geoJSON(boundary, {
+              style: { color: "blue", weight: 2, fillOpacity: 0.1 }
+            }).addTo(map);
+
+            map.fitBounds(window.boundaryLayer.getBounds());
+          } catch(e) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: "DEBUG",
+              msg: "Boundary error: " + e.message
+            }));
+          }
+        })();
+        true;
+      `);
+    }
+  }, [isMapReady]);
 
   // ==================== REQUEST PERMISSION ====================
   const requestLocationPermission = async () => {
@@ -456,7 +488,29 @@ const HomeScreen = () => {
                 webViewRef.current.injectJavaScript(`
                   (function() {
                     try {
+
+                      if (window.searchMarker) {
+                        map.removeLayer(window.searchMarker);
+                        window.searchMarker = null;
+                      }
+
+                      if (window.amenityLayer) {
+                        map.removeLayer(window.amenityLayer);
+                        window.amenityLayer = L.layerGroup().addTo(map);
+                      }
+
+                      if (window.selectedAmenityMarker) {
+                        map.removeLayer(window.selectedAmenityMarker);
+                      }
+                      window.selectedAmenityMarker = L.marker([${data.data.lat}, ${data.data.lon}])
+                        .addTo(map)
+                        .bindPopup("<b>${data.data.name}</b>")
+                        .openPopup();
+
+
                       console.log("Fetching route from WFS...");
+
+
                       fetch('${url}')
                         .then(res => res.json())
                         .then(data => {
@@ -752,7 +806,8 @@ const HomeScreen = () => {
         )
       ) : (
         <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?</Text>
+          <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?
+          </Text>
           <Text style={styles.sectionTitle}>-Tìm kiếm nhanh 2km xung quanh-</Text>
           <Picker 
             selectedValue={selectedAmenity} 

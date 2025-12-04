@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import {API_URL_PATH} from "../../config";
 
 export interface CustomUser {
     user_id: number,
@@ -32,8 +32,8 @@ type AuthResult = {
 }
 
 // services/authService.ts
-const API_URL = "http://192.168.56.1:3000/api/users";
-const API_URL2 = "http://192.168.56.1:3000/api/places";
+const API_URL = `http://${API_URL_PATH}/api/users`;
+const API_URL2 = `http://${API_URL_PATH}/api/places`;
 
 export const AuthService = {
     /**

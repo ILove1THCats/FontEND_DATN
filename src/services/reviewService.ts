@@ -1,3 +1,4 @@
+import {API_URL_PATH} from "../../config";
 
 export interface NewReview {
     placeid: number,
@@ -6,7 +7,7 @@ export interface NewReview {
     comment: string
 }
 
-const API_URL = "http://192.168.56.1:3000/api/reviews";
+const API_URL = `http://${API_URL_PATH}/api/reviews`;
 
 export const ReviewService = {
     getLike: async (placeId: number) : Promise<number> => {

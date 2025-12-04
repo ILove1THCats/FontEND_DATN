@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {API_URL_PATH} from "../../config";
 
 export interface User {
   user_id: number;
@@ -7,10 +8,9 @@ export interface User {
   role: string;
   created_at: string;
 }
-const API_URL = "http://192.168.56.1:3000/api/users";
+const API_URL = `http://${API_URL_PATH}/api/users`;
 
 export const UserService = {
-
     getProfile: async () => {
         try {
             const userStr = await AsyncStorage.getItem("user");

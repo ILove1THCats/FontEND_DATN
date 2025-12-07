@@ -78,8 +78,8 @@ const HomeScreen = () => {
           Alert.alert("GPS error", err.message);
         },
         {
-          enableHighAccuracy: true,
-          timeout: 15000,
+          enableHighAccuracy: false,
+          timeout: 60000,
           maximumAge: 10000,
         }
       );
@@ -743,6 +743,7 @@ const HomeScreen = () => {
       {isRouting ? (
         selectedLocation && currentUser &&(
           <View style={styles.reviewContainer}>
+            <ScrollView style={styles.reviewList}>
             {/* Góc trên: Bong bóng icon */}
             <View style={styles.reviewHeaderRight}>
               <TouchableOpacity style={styles.bubbleIcon} onPress={() => handleLike(Number(currentUser.user_id) , selectedLocation.id)}>
@@ -790,7 +791,7 @@ const HomeScreen = () => {
             >
               <Text style={styles.submitReviewText}>Gửi đánh giá</Text>
             </TouchableOpacity>
-
+            </ScrollView>
             {/* Danh sách review */}
             <ScrollView style={styles.reviewList}>
               {reviews.length === 0 ? (

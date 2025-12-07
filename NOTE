@@ -1,0 +1,10 @@
+//Cho lần đầu chạy file setup
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+.\setup-dev.ps1
+
+
+adb --version
+java -version
+node -v
+npm -v

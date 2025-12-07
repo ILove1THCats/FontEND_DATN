@@ -171,6 +171,8 @@ const HomeScreen = () => {
       currentPosition.lon,
       2000
     );
+
+    await handleResetMap();
     
     console.log(result);
     if (result && webViewRef.current) {
@@ -186,15 +188,21 @@ const HomeScreen = () => {
             map.removeLayer(window.routeLayer);
           }
 
+          if (window.searchMarker) {
+            map.removeLayer(window.searchMarker);
+          }
+
           window.amenityLayer = L.layerGroup().addTo(map);
 
           const places = ${JSON.stringify(result) || '[]'};
 
           places.forEach(p => {
             if (p.lat && p.long) {
+              const placeName = p.name ?? "Vô danh";
+
               const marker = L.marker([p.lat, p.long])
                 .addTo(window.amenityLayer)
-                .bindPopup('<b>' + (p.name || "Địa điểm") + '</b>');
+                .bindPopup('<b>' + placeName + '</b>');
 
               marker.on("click", () => {
                 if (window.ReactNativeWebView) {
@@ -375,6 +383,12 @@ const HomeScreen = () => {
         (function() {
           try {
             map.setView([10.762622, 106.660172], 13);
+
+            if (window.amenityLayer) {
+              map.removeLayer(window.amenityLayer);
+              window.amenityLayer.clearLayers();
+            }
+
             if (window.searchMarker) {
               map.removeLayer(window.searchMarker);
             }
@@ -382,6 +396,7 @@ const HomeScreen = () => {
             if (window.routeLayer) {
               map.removeLayer(window.routeLayer);
             }
+
           } catch(e) {
             console.error("Inject JS error:", e);
             alert("Lỗi JS: " + e.message);
@@ -733,9 +748,6 @@ const HomeScreen = () => {
               <TouchableOpacity style={styles.bubbleIcon} onPress={() => handleLike(Number(currentUser.user_id) , selectedLocation.id)}>
                 <Text style={{ fontSize: 18 }}>⭐ {liked}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.bubbleIcon} onPress={() => setIsRouting(false)}>
-                <Text style={{ fontSize: 18 }}>❌</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Title */}
@@ -808,10 +820,11 @@ const HomeScreen = () => {
         <View style={styles.quickActions}>
           <Text style={styles.sectionTitle}>Khám phá nhanh. BẠN MUỐN ĐI ĐÂU?
           </Text>
-          <Text style={styles.sectionTitle}>-Tìm kiếm nhanh 2km xung quanh-</Text>
           <Picker 
             selectedValue={selectedAmenity} 
-            onValueChange={(value) => handleSelectAmenity(value)}
+            onValueChange={(value) => {
+              handleResetMap();
+              handleSelectAmenity(value)}}
           >
             <Picker.Item label="Chọn..." value="" />
             {amenity

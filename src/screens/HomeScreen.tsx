@@ -9,7 +9,8 @@ import {
   Alert,
   TextInput,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  FlatList
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import WebView from 'react-native-webview';
@@ -43,17 +44,48 @@ const HomeScreen = () => {
   const [rating, setRating] = useState(1);
   //GPS
   const [currentPosition, setCurrentPosition] = useState<{ lon: number, lat: number } | null>(null);
+  const [selectedDistance, setSelectedDistance] = useState("0.002");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const typingTimeout = useRef<number | null>(null);
 
-    useEffect(() => {
-      const fetchUser = async () => {
-        const user = await AuthService.getCurrentUser();
-        const amenitY = await AuthService.amenityFetch();
+  useEffect(() => {
+    const fetchUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      const amenitY = await AuthService.amenityFetch();
 
-        setAmenity(amenitY);
-        setCurrentUser(user);
-      };
-      fetchUser();
-    }, []);
+      setAmenity(amenitY);
+      setCurrentUser(user);
+    };
+    fetchUser();
+  }, []);
+
+  useEffect(() => {
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+    }
+
+    typingTimeout.current = setTimeout( async () => {
+      if (searchText.trim().length === 0) {
+              setSuggestions([]); // Xóa gợi ý nếu không có text
+              return;
+      }
+      try {
+        const data = await AuthService.getSearchingPlace(searchText);
+        
+        if(data) {
+            setSuggestions(data); // <--- data bây giờ là mảng thực tế
+        } else {
+            setSuggestions([]);
+        }
+      } catch (error) {
+        console.log(error)
+      } 
+    }, 350);
+
+    return () => {
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    };
+  }, [searchText]);
 
   // ===== REQUEST LOCATION PERMISSION =====
   useEffect(() => {
@@ -156,12 +188,20 @@ const HomeScreen = () => {
       Alert.alert("Chưa có vị trí!")
       return;
     }
+
     if (!isMapReady) {
       Alert.alert("Map chưa sẵn sàng!");
       return;
     }
 
-    console.log(currentPosition.lat, currentPosition.lon);
+    if(value === ""){
+      Alert.alert("Chưa chọn khu vực!");
+      return;
+    }
+
+    if(selectedDistance === ""){
+      setSelectedDistance("0.002");
+    }
 
     setSelectedAmenity(value);
     try {
@@ -169,12 +209,11 @@ const HomeScreen = () => {
       value,
       currentPosition.lat,
       currentPosition.lon,
-      2000
-    );
+      Number(selectedDistance)
+    ); 
 
-    await handleResetMap();
-    
     console.log(result);
+
     if (result && webViewRef.current) {
       const js = `
       (() => {
@@ -239,7 +278,7 @@ const HomeScreen = () => {
     }
   };
 
-  //-------------------------------------------------------------------------- Tìm kiếm địa điểm sử dụng Nominatim (OpenStreetMap)
+  //---------------------------------------------------------------- Tìm kiếm địa điểm
   const handleSearch = async () => {
     if (!searchText.trim()) return;
     
@@ -300,6 +339,71 @@ const HomeScreen = () => {
                   lat: ${lat},
                   lon: ${lon},
                   address: '${location.display_name}'
+                }
+              }));
+
+            }
+            true;
+          `);
+        }
+      } else {
+        setIsSearching(false);
+        Alert.alert('Không tìm thấy', 'Không tìm thấy địa điểm bạn yêu cầu');
+      }
+    } catch (error) {
+      setIsSearching(false);
+      console.error('Lỗi tìm kiếm:', error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi tìm kiếm');
+    }
+  };
+
+  const handleSelectSuggestion = (item: any) => {
+    setSearchText(item.name);
+    setSuggestions([]);      // ẩn dropdown
+    handleSearchSuggestion(item.name);
+  };
+
+    const handleSearchSuggestion = async (namePlace: string) => {
+    if (!searchText.trim()) return;
+    
+    setIsSearching(true);
+    
+    try {
+      const data = await AuthService.searchingPlace(namePlace);
+      
+      if (data && data.length > 0) {
+        const location = data[0];
+        const lat = parseFloat(location.lat);
+        const lon = parseFloat(location.lon);
+        
+        // Di chuyển map đến vị trí tìm được
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`
+            // Xóa các marker cũ
+            if (window.searchMarker) {
+              map.removeLayer(window.searchMarker);
+            }
+            
+            // Di chuyển map đến vị trí mới
+            map.setView([${lat}, ${lon}], 15);
+            
+            // Thêm marker mới
+            window.searchMarker = L.marker([${lat}, ${lon}])
+              .addTo(map)
+              .bindPopup('<b>${location.name}</b>')
+              .openPopup();
+            
+            // Thông báo kết quả
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'AMENITY_MARKER_CLICK',
+                success: true,
+                data: {
+                  id: 0,
+                  name: '${location.name.split(',')[0]}',
+                  lat: ${lat},
+                  lon: ${lon},
+                  address: '${location.name}'
                 }
               }));
 
@@ -696,6 +800,23 @@ const HomeScreen = () => {
         <TouchableOpacity style={styles.resetButton} onPress={handleResetMap}>
           <Text style={styles.resetButtonText}>🔄</Text>
         </TouchableOpacity>
+
+        {suggestions.length > 0 && (
+          <View style={styles.dropdown}>
+            <FlatList
+              data={suggestions}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={styles.dropdownItem}
+                  onPress={() => handleSelectSuggestion(item)}
+                >
+                  <Text style={styles.dropdownText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
       </View>
 
       {/* Map Container */}
@@ -827,7 +948,7 @@ const HomeScreen = () => {
               handleResetMap();
               handleSelectAmenity(value)}}
           >
-            <Picker.Item label="Chọn..." value="" />
+          <Picker.Item label="Chọn..." value="" />
             {amenity
               .filter(a => a)
               .map((original, index) => {
@@ -842,6 +963,15 @@ const HomeScreen = () => {
                   />
                 );
               })}
+          </Picker>
+          <Picker
+            selectedValue={selectedDistance}
+            onValueChange={(value) => setSelectedDistance(value)}
+          >
+            <Picker.Item label="Chọn khoảng cách..." value="" />
+            <Picker.Item label="2 km" value="0.002" />
+            <Picker.Item label="5 km" value="0.005" />
+            <Picker.Item label="8 km" value="0.008" />
           </Picker>
         </View>
       )}
@@ -1094,7 +1224,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 20
-  }
+  },
+  dropdown: {
+    position: "absolute",
+    top: 55,
+    left: 10,
+    right: 10,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingVertical: 6,
+    zIndex: 2000,
+    maxHeight: 200,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+
+  dropdownText: {
+    fontSize: 15,
+    color: "#333",
+  },
+
 });
 
 export default HomeScreen;

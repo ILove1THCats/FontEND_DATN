@@ -194,9 +194,9 @@ export const AuthService = {
         }
     },
 
-    nearbyPlacesFetch: async (amenity: string, lat: number, lon: number, radius: number = 2000): Promise<Place[] | null> => {
+    nearbyPlacesFetch: async (amenity: string, lat: number, lon: number, radius: number): Promise<Place[] | null> => {
         try {
-            const url = `${API_URL2}/nearby?amenity=${amenity}&lon=${lon}&lat=${lat}&radius=${radius}`;
+            const url = `${API_URL2}/nearby?amenity=${amenity}&lat=${lat}&lon=${lon}&radius=${radius}`;
             const response = await fetch(url, {
                 method: "GET",
                 headers: {
@@ -204,7 +204,7 @@ export const AuthService = {
                 }
             });
 
-            if (!response.ok) {
+            if (!response.ok) { 
                 console.error("API nearby lỗi:", response.status);
                 return null;
             }
@@ -215,4 +215,100 @@ export const AuthService = {
             return null;
         }
     },
+
+    searchingPlace: async (searchTxt: string) => {
+        try {
+            const response = await fetch(`${API_URL2}/searchPlaceFoward?searchTxt=${searchTxt}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (!response.ok) {
+                console.error("API getSearchingPlace lỗi:", response.status);
+                return null;
+            }
+            
+
+            const data = await response.json();
+            console.log(data);
+            return Array.isArray(data) ? data : [];
+            
+        } catch (error) {
+            console.log(error);
+        }
+
+    },
+
+    getSearchingPlace: async (searchTxt: string) => {
+        try {
+            const response = await fetch(`${API_URL2}/searchPlace?searchTxt=${searchTxt}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (!response.ok) {
+                console.error("API getSearchingPlace lỗi:", response.status);
+                return null;
+            }
+
+            const data = await response.json();
+
+            return Array.isArray(data) ? data : [];
+            
+        } catch (error) {
+            console.log(error);
+        }
+    }
+}
+
+function removeVietnameseTones(str: string) {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+const amenityMap: Array<{ keywords: string[]; amenity: string }> = [
+// Hospital
+{ keywords: ["bệnh viện", "benh vien", "vien", "trạm y tế", "tram y te", "y te", "hospital"], amenity: "hospital" },
+
+// ATM
+{ keywords: ["atm", "rút tiền", "rut tien", "ruttien"], amenity: "atm" },
+
+// Fire Station
+{ keywords: ["trạm cứu hỏa", "tram cuu hoa", "cứu hỏa", "cuu hoa", "pccc", "fire station"], amenity: "fire_station" },
+
+// University
+{ keywords: ["dai hoc", "daihoc", "university", "uni", "đại học", "trường đại học"], amenity: "university" },
+
+// Love Hotel
+{ keywords: ["khach san", "nha nghi", "hotel", "nhà nghỉ", "khách sạn"], amenity: "love_hotel" },
+
+// Marketplace
+{ keywords: ["cho", "market", "marketplace", "chợ"], amenity: "marketplace" },
+
+// Police
+{ keywords: ["cong an", "police", "ca", "don cong an", "công an", "đồn công an"], amenity: "police" },
+
+// Bank
+{ keywords: ["ngân hàng", "ngan hang", "bank"], amenity: "bank" },
+
+// Restaurant
+{ keywords: ["nha hang", "quan an", "restaurant", "nhà hàng", "ăn uống"], amenity: "restaurant" },
+];
+
+function detectAmenity(input: string): string | null {
+    for (const item of amenityMap) {
+        for (const kw of item.keywords) {
+        if (input.includes(kw)) {
+            return item.amenity;
+        }
+        }
+    }
+    return null;
 }

@@ -73,7 +73,7 @@ const HomeScreen = () => {
         const data = await AuthService.getSearchingPlace(searchText);
         
         if(data) {
-            setSuggestions(data); // <--- data bây giờ là mảng thực tế
+            setSuggestions(data);
         } else {
             setSuggestions([]);
         }
